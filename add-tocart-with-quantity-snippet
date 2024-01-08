@@ -1,0 +1,169 @@
+//1 - Remove the Add To cart Button
+remove_action('woocommerce_after_shop_loop_item', 'woocommerce_template_loop_add_to_cart', 10);
+//2 - // Add the Quanity Input field to shop and products
+add_action('woocommerce_after_shop_loop_item', 'QTY');
+function QTY()
+{
+    global $product;
+    ?>
+    <div class="shopAddToCart">
+    <button  value="-" class="minus"  >-</button>
+    <input type="text"
+    disabled="disabled"
+    size="2"
+    value="<?php echo (Check_if_product_in_cart($product->get_id())) ? Check_if_product_in_cart($product->get_id())['QTY'] : 0;
+    ?>"
+    id="count"
+    data-product-id= "<?php echo $product->get_id() ?>"
+    data-in-cart="<?php echo (Check_if_product_in_cart($product->get_id())) ? Check_if_product_in_cart($product->get_id())['in_cart'] : 0;
+    ?>"
+    data-in-cart-qty="<?php echo (Check_if_product_in_cart($product->get_id())) ? Check_if_product_in_cart($product->get_id())['QTY'] : 0;
+    ?>"
+    class="quantity  qty"
+    max_value = <?php echo ($product->get_max_purchase_quantity() == -1) ? 1000 : $product->get_max_purchase_quantity(); ?>
+    min_value = <?php echo $product->get_min_purchase_quantity(); ?>
+    >
+
+    <button type="button" value="+" class="plus"  >+</button>
+
+    </div>
+                          <?php
+}
+
+//3 - Check if the Product is in the Cart Already or not
+function Check_if_product_in_cart($product_ids)
+ {
+
+foreach (WC()->cart->get_cart() as $cart_item):
+
+    $items_id = $cart_item['product_id'];
+    $QTY = $cart_item['quantity'];
+
+    // for a unique product ID (integer or string value)
+    if ($product_ids == $items_id):
+        return ['in_cart' => true, 'QTY' => $QTY];
+
+    endif;
+
+endforeach;
+}
+//4- Add an Event Handler To update QTY after product clicked
+add_action('wc_ajax_update_qty', 'update_qty');
+
+function update_qty()
+{
+    ob_start();
+    $product_id = absint($_POST['product_id']);
+    $product = wc_get_product($product_id);
+    $quantity = $_POST['quantity'];
+
+    foreach (WC()->cart->get_cart() as $cart_item_key => $cart_item):
+
+        if ($cart_item['product_id'] == $product_id) {
+            WC()->cart->set_quantity($cart_item_key, $quantity, true);
+        }
+
+    endforeach;
+
+    wp_send_json('done');
+}
+///5- Finally We need Javascript to handle the event actions 
+
+ // Add Event Listner on the Plush button 
+  $('.plus').click(function () {
+
+    if (parseInt($(this).prev().val()) < parseInt($(this).prev().attr('max_value'))) {
+      $(this).prev().val(+$(this).prev().val() + 1);
+
+      var currentqty = parseInt($(this).prev().attr('data-in-cart-qty')) + 1;
+
+      var id = $(this).prev().attr('data-product-id');
+
+      var data = {
+        product_id: id,
+        quantity: 1
+      };
+      $(this).prev().attr('data-in-cart-qty', currentqty);
+      $(this).parent().addClass('loading');
+      $.post(wc_add_to_cart_params.wc_ajax_url.toString().replace('%%endpoint%%', 'add_to_cart'), data, function (response) {
+
+        if (!response) {
+          return;
+        }
+
+        if (response) {
+
+          var url = woocommerce_params.wc_ajax_url;
+          url = url.replace("%%endpoint%%", "get_refreshed_fragments");
+          $.post(url, function (data, status) {
+            $(".woocommerce.widget_shopping_cart").html(data.fragments["div.widget_shopping_cart_content"]);
+            if (data.fragments) {
+              jQuery.each(data.fragments, function (key, value) {
+
+                jQuery(key).replaceWith(value);
+              });
+            }
+            jQuery("body").trigger("wc_fragments_refreshed");
+          });
+          $('.plus').parent().removeClass('loading');
+
+        }
+
+      });
+
+
+    }
+
+
+
+
+  });
+
+
+
+ $('.minus').click(function () { if ($(this).next().val() > 0) {
+
+    $(this).next().val(+$(this).next().val() - 1);
+
+
+    var currentqty = parseInt($(this).next().val());
+
+    var id = $(this).next().attr('data-product-id');
+
+    var data = {
+      product_id: id,
+      quantity: currentqty
+    };
+    $(this).parent().addClass('loading');
+    $.post(wc_add_to_cart_params.wc_ajax_url.toString().replace('%%endpoint%%', 'update_qty'), data, function (response) {
+
+      if (!response) {
+        return;
+      }
+
+      if (response) {
+        var url = woocommerce_params.wc_ajax_url;
+        url = url.replace("%%endpoint%%", "get_refreshed_fragments");
+        $.post(url, function (data, status) {
+          $(".woocommerce.widget_shopping_cart").html(data.fragments["div.widget_shopping_cart_content"]);
+          if (data.fragments) {
+            jQuery.each(data.fragments, function (key, value) {
+
+              jQuery(key).replaceWith(value);
+            });
+          }
+          jQuery("body").trigger("wc_fragments_refreshed");
+        });
+        $('.plus').parent().removeClass('loading');
+      }
+
+    });
+
+
+
+ }
+  });
+
+
+
+});
